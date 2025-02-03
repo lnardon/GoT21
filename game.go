@@ -70,22 +70,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !m.playerTurn {
 				break
 			}
+
 			m.playerHand = append(m.playerHand, drawCard())
 			if handValue(m.playerHand) > 21 {
 				m.message = "You busted! Dealer wins. Press 'a' to play again or 'q' to quit."
+				m.playerTurn = false
 			}
 		case "s":
+			if !m.playerTurn {
+				break
+			}
+
 			m.playerTurn = false
 			for handValue(m.dealerHand) < 17 {
 				m.dealerHand = append(m.dealerHand, drawCard())
 			}
-			m.message = determineWinner(m)
+			winner := determineWinner(m)
+			m.message = fmt.Sprintf("%s\n%s", winner, "Press 'a' to play again or 'q' to quit.")
 		case "q":
 			fmt.Print("\033[H\033[2J")
 			return m, tea.Quit
 		case "a":
 			m = InitialModel()
-			tea.WindowSize()
 		}
 	}
 	return m, nil
@@ -124,7 +130,14 @@ func renderCards(hand []int) string {
 	for _, card := range hand {
 		cards = append(cards, cardStyle.Render(fmt.Sprintf("%d", card)))
 	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, cards...)
+
+	w, _, _ := term.GetSize(int(os.Stdout.Fd()))
+	t := lipgloss.JoinHorizontal(lipgloss.Top, cards...)
+	container := lipgloss.NewStyle().
+		Width(w).
+		Align(lipgloss.Center).
+		Render(fmt.Sprintf("%s", t))
+	return container
 }
 
 func (m model) View() string {
@@ -138,7 +151,7 @@ func (m model) View() string {
 		Width(m.width)
 
 	return lipgloss.JoinVertical(lipgloss.Left,
-		headerStyle.Render("Blackjack"),
+		headerStyle.Render("Got21"),
 		"Dealer's Hand:",
 		renderCards(m.dealerHand),
 		"\n\n\n\n",
