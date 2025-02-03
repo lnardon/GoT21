@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 	"math/rand"
-	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type model struct {
@@ -14,6 +14,8 @@ type model struct {
 	playerTurn bool
 	gameOver   bool
 	message    string
+	width      int
+	height     int
 }
 
 func initialModel() model {
@@ -23,6 +25,8 @@ func initialModel() model {
 		playerTurn: true,
 		gameOver:   false,
 		message:    "Your turn! Press 'h' to hit, 's' to stand.",
+		width:      0,
+		height:     0,
 	}
 }
 
@@ -45,26 +49,6 @@ func handValue(hand []int) int {
 	return sum
 }
 
-func checkWinner(m model) string {
-	playerScore := handValue(m.playerHand)
-	dealerScore := handValue(m.dealerHand)
-
-	if playerScore > 21 {
-		return "You busted! Dealer wins."
-	} else if dealerScore > 21 {
-		return "Dealer busted! You win."
-	} else if !m.playerTurn {
-		if playerScore > dealerScore {
-			return "You win!"
-		} else if dealerScore > playerScore {
-			return "Dealer wins!"
-		} else {
-			return "It's a tie!"
-		}
-	}
-	return "Would you like to play [a]gain or [quit]?"
-}
-
 type message string
 
 func (m model) Init() tea.Cmd {
@@ -74,54 +58,96 @@ func (m model) Init() tea.Cmd {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
 	case tea.KeyMsg:
-		if m.gameOver {
-			return m, tea.Quit
-		}
 		switch msg.String() {
 		case "h":
 			if !m.playerTurn {
 				break
 			}
-
 			m.playerHand = append(m.playerHand, drawCard())
 			if handValue(m.playerHand) > 21 {
-				m.message = checkWinner(m)
-				m.message = "Would you like to play [a]gain or [q]uit?"
+				m.message = "You busted! Dealer wins. Press 'a' to play again or 'q' to quit."
 			}
 		case "s":
 			m.playerTurn = false
-			for handValue(m.dealerHand) < 20 && handValue(m.playerHand) > handValue(m.dealerHand) {
+			for handValue(m.dealerHand) < 17 {
 				m.dealerHand = append(m.dealerHand, drawCard())
 			}
-			m.message = checkWinner(m)
+			m.message = determineWinner(m)
 		case "q":
+			fmt.Print("\033[H\033[2J")
 			return m, tea.Quit
 		case "a":
 			m = initialModel()
+			tea.WindowSize()
 		}
 	}
 	return m, nil
 }
 
+func determineWinner(m model) string {
+	playerScore := handValue(m.playerHand)
+	dealerScore := handValue(m.dealerHand)
+
+	if playerScore > 21 {
+		return "You busted! Dealer wins."
+	}
+
+	if dealerScore > 21 {
+		return "Dealer busted! You win."
+	}
+
+	if playerScore > dealerScore {
+		return "You win!"
+	}
+
+	if dealerScore > playerScore {
+		return "Dealer wins!"
+	}
+	return "It's a tie!"
+}
+
 func renderCards(hand []int) string {
+	cardStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		Width(6).
+		Padding(1).
+		Align(lipgloss.Center)
+
 	cards := []string{}
 	for _, card := range hand {
-		cards = append(cards, fmt.Sprintf("[ %d ]", card))
+		cards = append(cards, cardStyle.Render(fmt.Sprintf("%d", card)))
 	}
-	return strings.Join(cards, " ")
+	return lipgloss.JoinHorizontal(lipgloss.Top, cards...)
 }
 
 func (m model) View() string {
-	return fmt.Sprintf(
-		"\n ♣ Dealer's Hand: %s (Value: %d)\n\nYour Hand: %s (Value: %d)\n\n%s\n\n\n\n\nPress 'h' to hit, 's' to stand, 'q' to quit.\n",
-		renderCards(m.dealerHand), handValue(m.dealerHand),
-		renderCards(m.playerHand), handValue(m.playerHand),
+	headerStyle := lipgloss.NewStyle().
+		Bold(true).
+		Align(lipgloss.Center).
+		Foreground(lipgloss.Color("#FAFAFA")).
+		Background(lipgloss.Color("#7D56F4")).
+		Padding(1, 2).
+		MarginBottom(1).
+		Width(m.width)
+
+	return lipgloss.JoinVertical(lipgloss.Left,
+		headerStyle.Render("Blackjack"),
+		"Dealer's Hand:",
+		renderCards(m.dealerHand),
+		"\n\n\n\n",
+		"Your Hand:",
+		renderCards(m.playerHand),
+		"",
 		m.message,
 	)
 }
 
 func main() {
+	fmt.Print("\033[H\033[2J")
 	p := tea.NewProgram(initialModel())
 	if _, err := p.Run(); err != nil {
 		fmt.Println("Error running game:", err)
