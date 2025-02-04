@@ -2,7 +2,9 @@
 
 A game of 21 (a.k.a Blackjack) on the terminal using Golang, Bubbletea and Lipgloss.
 
-![./demo.gif](Demo)
+<p align="center">
+  <img src="./demo.gif">
+</p>
 
 ## What you need
 - Golang >= 1.23
